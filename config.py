@@ -19,8 +19,12 @@ ACCOUNTS = [
     {"key": "act_422653132521856",  "client": "Memorável",    "label": "C3",                 "token_env": "META_TOKEN_MEM", "skill_env": "meta-ads-memoravel"},
 ]
 
-# Famílias na ordem preferida (extras presentes nos dados entram depois).
-FAM_PREF = ["IPM", "DP100K", "IPL", "MXP", "KLT", "FA-Fp"]
+# Famílias na ordem preferida. Lista fechada do ano de 2025 — o classificador
+# (funnel_key) só emite estas + "Outros", então essa ordem controla 100% dos pills.
+FAM_PREF = [
+    "IPM", "DP100K", "PALESTRA MEMORAVEL", "NEP", "WKP", "IEM", "VCO",
+    "KLT", "W.E.M", "MXP", "MXP.PT", "FA-Fp", "VPO", "WPL", "ID-WEBN", "Outros",
+]
 
 
 def resolve_token(token_env: str, skill_env: str) -> str:
@@ -37,51 +41,58 @@ def resolve_token(token_env: str, skill_env: str) -> str:
     raise RuntimeError(f"Token nao encontrado: env {token_env} nem .env de {skill_env}")
 
 
-# Palavras de OBJETIVO (não são produto). Em nomes 2025 o 1º colchete costuma
-# ser o objetivo e o produto vem no 2º: [VENDAS] [P100K], [CAPTURA] [PDP]...
-_OBJ = {
-    "VENDAS", "CAPTURA", "ESCALA", "INSCRICAO", "INSCRIÇÃO", "INSCRICÕES", "INSCRIÇÕES",
-    "TESTE", "TESTE DE CRIATIVO", "TESTE DE CRIATIVOS", "RMKT", "RKMT", "REMARKETING",
-    "TRAFEGO", "TRÁFEGO", "LEADS", "TOPO", "ENGAJAMENTO", "ALCANCE", "CONVERSAO",
-    "CONVERSÃO", "AQUISICAO", "AQUISIÇÃO", "RETARGETING",
-}
+# Classificador de funil 2025 por ASSINATURA. Os nomes de campanha de 2025 usam
+# várias convenções incompatíveis (colchete-produto, objetivo-no-1o-colchete,
+# underscore, ix./th. prefixo, label de conta vazando). Em vez de parsear posição,
+# varremos o nome inteiro contra regras ordenadas — a 1ª que casa vence. A ORDEM
+# resolve nomes multi-token: [KLT]...[DP100K] -> KLT; [IPM-Le01][NEP] -> IPM.
+# Tudo que não casa com nenhum produto conhecido cai em "Outros".
+_RULES = [
+    (r"IPM-(FP|LE|TL)|\[IPM|\bII-FP",                                  "IPM"),
+    (r"\bKLT\b|TH\.KLT|\bKLT\d",                                       "KLT"),
+    (r"DP100K|P100K",                                                  "DP100K"),
+    (r"\bVPO\b|VPO-LE",                                                "VPO"),
+    (r"NEP0|\[NEP\]",                                                  "NEP"),
+    (r"\bWKP\b",                                                       "WKP"),
+    (r"\bIEM\b",                                                       "IEM"),
+    (r"\bVCO0\d",                                                      "VCO"),
+    (r"\bWPL\b|WPL-FP",                                                "WPL"),
+    (r"\bFA-FP|\[FA-FP",                                               "FA"),
+    (r"MXP\.PT|MXP PT|MXP-PT",                                         "MXP.PT"),
+    (r"\bMXP\b|MXP-(FP|LE)|\[MXP|MXP BRASIL",                          "MXP"),
+    (r"PALESTRA MEMORAVEL|\bPDP\b|CORREDOR|IMERS[ÃA]O PALCO|"
+     r"PALCO MILIONARI|ESTAMOS AO VIVO|TATHI'?S BRAZIL|"
+     r"INSCRI[CÇ][AÃ]O IMERS",                                         "PALESTRA MEMORAVEL"),
+    (r"W\.?E\.?M\b|EVENTOS MILION[ÁA]RIOS",                            "W.E.M"),
+    (r"ID WEBN",                                                       "ID-WEBN"),
+]
+
+# Famílias que carregam fase (PRODUTO-FaseNN) no nome — extraímos para detalhar
+# o funil. Para as demais, funil == família (produto consolidado).
+_PHASED = {"IPM", "DP100K", "MXP", "MXP.PT", "FA", "VPO", "WPL"}
 
 
 def funnel_key(name: str) -> str:
-    s = (name or "").strip()
-    if s.lower().startswith(("post do instagram", "publicacao", "publicação")):
-        return "Impulsionamentos IG"
-    s = re.sub(r"^ix\.\s*", "", s)                       # prefixo ix.
-    s = re.sub(r"\s*[-–—]\s*[Cc][óo]pia\s*$", "", s)     # sufixo "— Cópia"
-    s = re.sub(r"^C\d+\s*[-–]\s*", "", s)                # label de conta "C3 - "
+    up = (name or "").strip().upper()
+    if not up:
+        return "Outros"
+    # Post/publicação impulsionado sem produto identificável -> Outros
+    if re.match(r"^(POST|PUBLICA[CÇ][AÃ]O) DO INSTAGRAM", up):
+        return "Outros"
 
-    # 1) Código de produto com fase no começo: IPM-Fp01, VPO-Le03, Mxp.Pt-Fp01, DP100K-Fp01
-    m = re.match(r"^\[?\s*([A-Za-z][A-Za-z0-9.]{1,7})[-\s.]?(Le|Fp)\s?0?(\d+)", s, re.I)
-    if m:
-        ph = "Le" if m.group(2).lower() == "le" else "Fp"
-        return f"{m.group(1).upper().rstrip('.')}-{ph}{int(m.group(3)):02d}"
+    fam = next((f for rx, f in _RULES if re.search(rx, up)), None)
+    if fam is None:
+        return "Outros"
 
-    # 2) Colchetes: pula objetivo(s) e usa o 1º que for produto de verdade
-    brackets = re.findall(r"\[([^\]]+)\]", s)
-    if brackets:
-        for b in brackets:
-            if b.strip().upper() not in _OBJ:
-                return b.strip()
-        return brackets[0].strip()
-
-    # 3) Sem colchete: 1º token de produto, pulando nº de campanha (CPnn) e datas
-    for tok in re.split(r"[-_\s|]+", s):
-        tok = tok.strip()
-        if not tok:
-            continue
-        if re.fullmatch(r"CP\d+|C\d+|\d+|\d{1,2}/\d{1,2}", tok, re.I):
-            continue
-        return tok
-    return (s[:16] or "Outros")
+    if fam in _PHASED:
+        m = re.search(r"-(FP|LE|TL)\s?0?(\d{1,2})", up)
+        if m:
+            ph = {"FP": "Fp", "LE": "Le", "TL": "TL"}[m.group(1)]
+            return f"{fam}-{ph}{int(m.group(2)):02d}"
+    return fam
 
 
 def family(funnel: str) -> str:
-    if funnel.lower().startswith("impuls"):
-        return "Outros"
-    tok = re.split(r"[-\s]", funnel)[0].upper()
-    return "FA-Fp" if tok == "FA" else tok
+    m = re.match(r"^(.*?)-(Fp|Le|TL)\d", funnel)
+    base = m.group(1) if m else funnel
+    return "FA-Fp" if base == "FA" else base

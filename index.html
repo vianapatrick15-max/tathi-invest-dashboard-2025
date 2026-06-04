@@ -180,13 +180,13 @@
 
   <section class="kpis rv" style="animation-delay:.08s">
     <div class="kpi lead">
-      <div class="kl">Custo total · com imposto (12,5%)</div>
+      <div class="kl">Investimento total · mídia</div>
       <div class="kv" id="total">R$ 0</div>
       <div class="ks" id="totalsub">—</div>
     </div>
-    <div class="kpi"><div class="kl">Investimento em mídia</div><div class="kv" id="media">R$ 0</div><div class="ks" id="mediasub">—</div></div>
-    <div class="kpi tax"><div class="kl">Imposto Meta · 12,5%</div><div class="kv" id="imposto">R$ 0</div><div class="ks">sobre a mídia do filtro</div></div>
-    <div class="kpi"><div class="kl">Média / dia · c/ imposto</div><div class="kv" id="avgday">R$ 0</div><div class="ks" id="avgsub">—</div></div>
+    <div class="kpi"><div class="kl">Média / dia</div><div class="kv" id="avgday">R$ 0</div><div class="ks" id="avgsub">—</div></div>
+    <div class="kpi"><div class="kl">Pico diário</div><div class="kv" id="peak">R$ 0</div><div class="ks" id="peaksub">—</div></div>
+    <div class="kpi"><div class="kl">Funis ativos</div><div class="kv" id="nfunis">0</div><div class="ks" id="nfunissub">—</div></div>
   </section>
 
   <section class="card rv" style="animation-delay:.12s">
@@ -229,11 +229,10 @@
 <script>
 let DATA;
 function boot(){
-const TAX=0.125;
 const ACCS=DATA.accounts, FAMOF=DATA.fam_of, REC=DATA.records, FORDER=DATA.fam_order;
 const MN=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const MDAYS=[31,28,31,30,31,30,31,31,30,31,30,31];
-const FCOLOR={IPM:'#8A7CF0',DP100K:'#3FB9A0',IPL:'#E0708E',MXP:'#36A8C9',KLT:'#B58BE0','FA-Fp':'#D89A5B',VPO:'#C9B84E',Outros:'#6B7480'};
+const FCOLOR={IPM:'#8A7CF0',DP100K:'#3FB9A0','PALESTRA MEMORAVEL':'#E0708E',NEP:'#5B8DEF',WKP:'#E08A3C',IEM:'#C77DD6',VCO:'#4FB0E0',KLT:'#B58BE0','W.E.M':'#E0B04E',MXP:'#36A8C9','MXP.PT':'#2E8AA8','FA-Fp':'#D89A5B',VPO:'#C9B84E',WPL:'#7FB069','ID-WEBN':'#9AA0A6',Outros:'#6B7480'};
 const col=f=>FCOLOR[f]||'#6B7480';
 const BRL=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:2,maximumFractionDigits:2});
 const BRLk=n=>n>=1000?('R$ '+(n/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})+'k'):BRL(n);
@@ -330,7 +329,7 @@ function drawArea(byDate){
     cross.setAttribute('x1',gx);cross.setAttribute('x2',gx);cross.style.opacity=1;
     cdot.setAttribute('cx',gx);cdot.setAttribute('cy',gy);cdot.style.opacity=1;
     tip.style.opacity=1;tip.style.left=(gx/W*r.width)+'px';tip.style.top=(gy/H*r.height)+'px';
-    tip.innerHTML=`<span>${fmtDY(days[i][0])}</span><b>${BRL(v)}</b><em>c/ imposto ${BRL(v*(1+TAX))}</em>`;
+    tip.innerHTML=`<span>${fmtDY(days[i][0])}</span><b>${BRL(v)}</b><em>investimento em mídia</em>`;
   }
   function leave(){cross.style.opacity=0;cdot.style.opacity=0;tip.style.opacity=0}
   hit.onmousemove=move;hit.onmouseleave=leave;hit.ontouchmove=e=>{move(e);e.preventDefault()};hit.ontouchend=leave;
@@ -348,19 +347,20 @@ function drawDonut(fam){
 
 function render(){
   const {grand,byClient,fg,fam,byDate}=aggregate();
-  const total=grand*(1+TAX), imposto=grand*TAX;
   let nAccts=0;Object.values(byClient).forEach(c=>nAccts+=Object.keys(c.accounts).length);
   const span=Math.round((new Date(ST.until)-new Date(ST.from))/864e5)+1;
   let peakV=0,peakD='—';for(const[k,v]of Object.entries(byDate))if(v>peakV){peakV=v;peakD=k}
+  const nfunis=Object.keys(fg).length;
 
-  $('hsub').textContent=nAccts+' contas com verba · '+Object.keys(fg).length+' funis · período 2026';
-  tween($('total'),total,v=>'R$ '+Math.round(v).toLocaleString('pt-BR'));
-  tween($('media'),grand,v=>'R$ '+Math.round(v).toLocaleString('pt-BR'));
-  tween($('imposto'),imposto,v=>'R$ '+Math.round(v).toLocaleString('pt-BR'));
-  tween($('avgday'),total/Math.max(1,span),v=>'R$ '+Math.round(v).toLocaleString('pt-BR'));
+  $('hsub').textContent=nAccts+' contas com verba · '+nfunis+' funis · ano 2025';
+  tween($('total'),grand,v=>'R$ '+Math.round(v).toLocaleString('pt-BR'));
+  tween($('avgday'),grand/Math.max(1,span),v=>'R$ '+Math.round(v).toLocaleString('pt-BR'));
+  tween($('peak'),peakV,v=>'R$ '+Math.round(v).toLocaleString('pt-BR'));
+  tween($('nfunis'),nfunis,v=>String(Math.round(v)));
   $('totalsub').textContent=fmtDY(ST.from)+' → '+fmtDY(ST.until);
-  $('mediasub').textContent='base de cálculo do imposto';
   $('avgsub').textContent=span+' dias no período';
+  $('peaksub').textContent=peakD==='—'?'—':('em '+fmtD(peakD));
+  $('nfunissub').textContent=nAccts+' contas com verba';
   $('peakhint').textContent=peakD==='—'?'—':('pico '+BRLk(peakV)+' em '+fmtD(peakD));
 
   if(grand<=0){
@@ -392,7 +392,7 @@ function render(){
     <div class="fbar"><i data-w="${Math.max(2,pct(sp,rmx)).toFixed(1)}" style="background:${col(FAMOF[fn])}"></i></div>
     <div class="fval"><span class="v">${BRL(sp)}</span><span class="p">${pct(sp,grand).toFixed(1)}%</span></div></div>`).join('')+`</div>`;
 
-  $('note').innerHTML=`Imposto de <b style="color:var(--c-fa)">12,5%</b> aplicado sobre o investimento em mídia — Custo total do filtro = mídia ${BRL(grand)} + imposto ${BRL(imposto)} = <b style="color:var(--acc2)">${BRL(total)}</b>. O detalhamento por funil, conta e ranking é exibido em valores de mídia (sem imposto).`;
+  $('note').innerHTML=`Valores de <b style="color:var(--acc2)">investimento em mídia</b> (2025 não teve imposto Meta). Total do filtro: <b style="color:var(--acc2)">${BRL(grand)}</b>. Campanhas agrupadas por funil/produto a partir do nome — o que não casa com nenhum funil conhecido entra em <b>Outros</b>.`;
 
   requestAnimationFrame(()=>document.querySelectorAll('.meter>i[data-w],.fbar>i[data-w]').forEach(i=>i.style.width=i.dataset.w+'%'));
 }
