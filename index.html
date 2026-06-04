@@ -315,13 +315,15 @@ function drawArea(byDate){
     </defs>
     ${grid}
     <path d="${area}" fill="url(#ag)"/>
-    <path class="aline" d="${line}" fill="none" stroke="#4D8EF7" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" style="stroke-dasharray:2600;stroke-dashoffset:2600;animation:draw 1s ease forwards"/>
+    <path class="aline" d="${line}" fill="none" stroke="#4D8EF7" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     ${dot}${ticks}
     <line id="cross" x1="0" y1="${pt}" x2="0" y2="${pt+ih}" stroke="#4D8EF7" stroke-width="1" stroke-opacity=".4" style="opacity:0"/>
     <circle id="cdot" r="4" fill="#4D8EF7" stroke="#0D1117" stroke-width="2" style="opacity:0"/>
     <rect id="hit" x="${pl}" y="${pt}" width="${iw}" height="${ih}" fill="transparent"/>`;
-  if(!document.getElementById('drawkf')){const s=document.createElement('style');s.id='drawkf';s.textContent='@keyframes draw{to{stroke-dashoffset:0}}';document.head.appendChild(s)}
   const svg=$('area'),hit=$('hit'),cross=$('cross'),cdot=$('cdot'),tip=$('tip');
+  const aln=svg.querySelector('.aline');
+  if(aln){const L=aln.getTotalLength();aln.style.strokeDasharray=L;aln.style.strokeDashoffset=L;aln.getBoundingClientRect();
+    aln.style.transition='stroke-dashoffset 1s ease';aln.style.strokeDashoffset='0';}
   function move(ev){
     const r=svg.getBoundingClientRect();const px=(ev.touches?ev.touches[0].clientX:ev.clientX)-r.left;
     const sx=px/r.width*W;let i=n<=1?0:Math.round((sx-pl)/(iw/(n-1)));i=Math.max(0,Math.min(n-1,i));
