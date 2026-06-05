@@ -297,16 +297,29 @@ function tween(el,to,fmt){
 
 function drawArea(byDate){
   const W=820,H=250,pl=10,pr=10,pt=20,pb=26,iw=W-pl-pr,ih=H-pt-pb;
-  const days=[];let d=new Date(ST.from+'T12:00:00'),end=new Date(ST.until+'T12:00:00');
-  while(d<=end){const k=iso(d);days.push([k,byDate[k]||0]);d.setDate(d.getDate()+1)}
-  const n=days.length,max=Math.max(1,...days.map(x=>x[1]));
+  // dias do periodo (preenche faltantes com 0)
+  const daily=[];let d=new Date(ST.from+'T12:00:00'),end=new Date(ST.until+'T12:00:00');
+  while(d<=end){const k=iso(d);daily.push([k,byDate[k]||0]);d.setDate(d.getDate()+1)}
+  // periodo longo (>70 dias) -> agrega por mes p/ legibilidade; senao diario.
+  // sem isso, um pico diario (ex.: lancamento de julho) achata o resto do ano.
+  const monthly=daily.length>70;
+  let pts;
+  if(monthly){
+    const mb=new Map();
+    daily.forEach(([k,v])=>{const mk=k.slice(0,7);mb.set(mk,(mb.get(mk)||0)+v)});
+    pts=[...mb.entries()].map(([mk,v])=>{const mo=+mk.slice(5,7);return {v, tick:MN[mo-1], tip:MN[mo-1]+'/'+mk.slice(2,4)}});
+  }else{
+    pts=daily.map(([k,v])=>({v, tick:fmtD(k), tip:fmtDY(k)}));
+  }
+  const n=pts.length,max=Math.max(1,...pts.map(p=>p.v));
   const X=i=>pl+(n<=1?iw/2:i*iw/(n-1)), Y=v=>pt+ih*(1-v/max);
   let line='';
-  days.forEach(([k,v],i)=>{line+=(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '});
-  const area=`M${X(0).toFixed(1)} ${(pt+ih).toFixed(1)} `+days.map(([k,v],i)=>'L'+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ')+` L${X(n-1).toFixed(1)} ${(pt+ih).toFixed(1)} Z`;
+  pts.forEach((p,i)=>{line+=(i?'L':'M')+X(i).toFixed(1)+' '+Y(p.v).toFixed(1)+' '});
+  const area=`M${X(0).toFixed(1)} ${(pt+ih).toFixed(1)} `+pts.map((p,i)=>'L'+X(i).toFixed(1)+' '+Y(p.v).toFixed(1)).join(' ')+` L${X(n-1).toFixed(1)} ${(pt+ih).toFixed(1)} Z`;
   let grid='';for(let g=1;g<=2;g++){const yy=(pt+ih*g/3).toFixed(1);grid+=`<line x1="${pl}" y1="${yy}" x2="${W-pr}" y2="${yy}" stroke="#212834" stroke-width="1" stroke-dasharray="2 5"/>`}
-  let ticks='';const tk=Math.min(6,n);for(let i=0;i<tk;i++){const idx=Math.round(i*(n-1)/(tk-1||1));ticks+=`<text x="${X(idx).toFixed(1)}" y="${H-7}" fill="#586271" font-family="IBM Plex Mono" font-size="10" text-anchor="middle">${fmtD(days[idx][0])}</text>`}
-  const dot=n===1?`<circle cx="${X(0)}" cy="${Y(days[0][1])}" r="4.5" fill="#4D8EF7"/>`:'';
+  let dots='';if(monthly)pts.forEach((p,i)=>{dots+=`<circle cx="${X(i).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="3" fill="#4D8EF7"/>`});
+  let ticks='';const tk=monthly?n:Math.min(6,n);for(let i=0;i<tk;i++){const idx=monthly?i:Math.round(i*(n-1)/(tk-1||1));ticks+=`<text x="${X(idx).toFixed(1)}" y="${H-7}" fill="#586271" font-family="IBM Plex Mono" font-size="10" text-anchor="middle">${pts[idx].tick}</text>`}
+  const dot=n===1?`<circle cx="${X(0)}" cy="${Y(pts[0].v)}" r="4.5" fill="#4D8EF7"/>`:'';
   $('area').innerHTML=`
     <defs>
       <linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
@@ -316,7 +329,7 @@ function drawArea(byDate){
     ${grid}
     <path d="${area}" fill="url(#ag)"/>
     <path class="aline" d="${line}" fill="none" stroke="#4D8EF7" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    ${dot}${ticks}
+    ${dots}${dot}${ticks}
     <line id="cross" x1="0" y1="${pt}" x2="0" y2="${pt+ih}" stroke="#4D8EF7" stroke-width="1" stroke-opacity=".4" style="opacity:0"/>
     <circle id="cdot" r="4" fill="#4D8EF7" stroke="#0D1117" stroke-width="2" style="opacity:0"/>
     <rect id="hit" x="${pl}" y="${pt}" width="${iw}" height="${ih}" fill="transparent"/>`;
@@ -327,11 +340,11 @@ function drawArea(byDate){
   function move(ev){
     const r=svg.getBoundingClientRect();const px=(ev.touches?ev.touches[0].clientX:ev.clientX)-r.left;
     const sx=px/r.width*W;let i=n<=1?0:Math.round((sx-pl)/(iw/(n-1)));i=Math.max(0,Math.min(n-1,i));
-    const gx=X(i),gy=Y(days[i][1]),v=days[i][1];
+    const gx=X(i),gy=Y(pts[i].v),v=pts[i].v;
     cross.setAttribute('x1',gx);cross.setAttribute('x2',gx);cross.style.opacity=1;
     cdot.setAttribute('cx',gx);cdot.setAttribute('cy',gy);cdot.style.opacity=1;
     tip.style.opacity=1;tip.style.left=(gx/W*r.width)+'px';tip.style.top=(gy/H*r.height)+'px';
-    tip.innerHTML=`<span>${fmtDY(days[i][0])}</span><b>${BRL(v)}</b><em>investimento em mídia</em>`;
+    tip.innerHTML=`<span>${pts[i].tip}</span><b>${BRL(v)}</b><em>${monthly?'mídia no mês':'investimento em mídia'}</em>`;
   }
   function leave(){cross.style.opacity=0;cdot.style.opacity=0;tip.style.opacity=0}
   hit.onmousemove=move;hit.onmouseleave=leave;hit.ontouchmove=e=>{move(e);e.preventDefault()};hit.ontouchend=leave;
@@ -363,7 +376,7 @@ function render(){
   $('avgsub').textContent=span+' dias no período';
   $('peaksub').textContent=peakD==='—'?'—':('em '+fmtD(peakD));
   $('nfunissub').textContent=nAccts+' contas com verba';
-  $('peakhint').textContent=peakD==='—'?'—':('pico '+BRLk(peakV)+' em '+fmtD(peakD));
+  $('peakhint').textContent=(span>70)?'agregado por mês · pico diário '+BRLk(peakV):(peakD==='—'?'—':('pico '+BRLk(peakV)+' em '+fmtD(peakD)));
 
   if(grand<=0){
     $('area').innerHTML='';$('donut').innerHTML='';$('dleg').innerHTML='';$('dcount').textContent='0';
